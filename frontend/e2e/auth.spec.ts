@@ -10,6 +10,7 @@ test('real browser WebAuthn, MFA, recovery, credential management and logout',as
  await page.getByRole('button',{name:'Create passkey',exact:true}).click();
  await expect(page.getByRole('heading',{name:/Your passkeys/})).toBeVisible();
  await page.getByRole('button',{name:'Generate new codes'}).click();
+ await expect(page.locator('.recovery-list code')).toHaveCount(10);
  const codes=await page.locator('.recovery-list code').allTextContents(); expect(codes).toHaveLength(10);
  await page.getByRole('button',{name:'I have saved my codes'}).click();
  await page.getByRole('button',{name:'Add passkey',exact:true}).click();
@@ -23,11 +24,11 @@ test('real browser WebAuthn, MFA, recovery, credential management and logout',as
  const otherCdp=await otherContext.newCDPSession(other); await otherCdp.send('WebAuthn.enable');
  const {authenticatorId:otherId}=await otherCdp.send('WebAuthn.addVirtualAuthenticator',{options:{protocol:'ctap2',transport:'internal',hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}});
  for(const credential of virtualCredentials)await otherCdp.send('WebAuthn.addCredential',{authenticatorId:otherId,credential});
- await other.goto('http://localhost:5173'); await other.getByRole('button',{name:'Continue with a passkey'}).click();
+ await other.goto(new URL('/',page.url()).href); await other.getByRole('button',{name:'Continue with a passkey'}).click();
  await expect(other.getByRole('heading',{name:/Your passkeys/})).toBeVisible();
  await page.getByRole('button',{name:'Revoke other sessions'}).click();
  await expect(page.getByRole('status')).toContainText('Other sessions have been revoked');
- await expect.poll(async()=>(await otherContext.request.get('http://localhost:5173/api/me')).status()).toBe(401);
+ await expect.poll(async()=>(await otherContext.request.get(new URL('/api/me',page.url()).href)).status()).toBe(401);
  const synced=await otherCdp.send('WebAuthn.getCredentials',{authenticatorId:otherId});
  for(const credential of synced.credentials){await cdp.send('WebAuthn.removeCredential',{authenticatorId,credentialId:credential.credentialId});await cdp.send('WebAuthn.addCredential',{authenticatorId,credential});}
  await otherContext.close();
@@ -45,6 +46,7 @@ test('real browser WebAuthn, MFA, recovery, credential management and logout',as
  await page.getByLabel('Verification code',{exact:true}).fill(totp());
  await page.getByRole('button',{name:'Verify authenticator'}).click();
  await expect(page.getByRole('dialog',{name:'Save recovery codes'})).toBeVisible();
+ await expect(page.locator('.recovery-list code')).toHaveCount(10);
  const mfaCodes=await page.locator('.recovery-list code').allTextContents();
  await page.getByRole('button',{name:'I have saved my codes'}).click();
  await page.getByRole('button',{name:'Sign out',exact:true}).click();
