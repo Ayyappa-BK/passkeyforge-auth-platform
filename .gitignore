@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+**/target/
+**/node_modules/
+**/dist/
+**/test-results/
+**/playwright-report/
+*.log
+.DS_Store
+.idea/
+.vscode/

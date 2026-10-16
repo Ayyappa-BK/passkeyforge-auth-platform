@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: passkeyforge
+      POSTGRES_USER: passkeyforge
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run scripts/init-env.sh}
+    volumes: ["postgres-data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U passkeyforge -d passkeyforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backend:
+    build: ./backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/passkeyforge
+      DB_USER: passkeyforge
+      DB_PASSWORD: ${DB_PASSWORD:?Run scripts/init-env.sh}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?Run scripts/init-env.sh}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      RP_ID: ${RP_ID:-localhost}
+      RP_ORIGIN: ${RP_ORIGIN:-http://localhost:8080}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel:4318/v1/traces
+    ports: ["127.0.0.1:9090:9090"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  web:
+    build: ./frontend
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on: [backend]
+    read_only: true
+    tmpfs: [/tmp, /var/cache/nginx, /var/run]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    volumes: ["./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["127.0.0.1:9091:9090"]
+  otel:
+    image: otel/opentelemetry-collector-contrib:0.139.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes: ["./deploy/otel.yml:/etc/otelcol-contrib/config.yaml:ro"]
+volumes:
+  postgres-data:

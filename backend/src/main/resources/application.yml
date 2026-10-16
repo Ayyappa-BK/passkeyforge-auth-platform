@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: passkeyforge
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/passkeyforge}
+    username: ${DB_USER:passkeyforge}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 16
+  session:
+    store-type: jdbc
+    timeout: 20m
+    jdbc:
+      initialize-schema: never
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+server:
+  port: 8080
+  forward-headers-strategy: none
+  servlet:
+    session:
+      cookie:
+        name: PFSESSION
+        http-only: true
+        secure: ${COOKIE_SECURE:true}
+        same-site: strict
+      tracking-modes: cookie
+  max-http-request-header-size: 16KB
+  tomcat:
+    max-http-form-post-size: 64KB
+management:
+  server:
+    port: 9090
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: ${TRACE_SAMPLE_RATE:0.1}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+logging:
+  structured:
+    format:
+      console: logstash
+forge:
+  rp-id: ${RP_ID:localhost}
+  origin: ${RP_ORIGIN:http://localhost:8080}
+  encryption-key: ${TOTP_ENCRYPTION_KEY}
