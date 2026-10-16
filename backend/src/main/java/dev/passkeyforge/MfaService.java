@@ -20,7 +20,7 @@ public class MfaService {
   var a=store.account(id,true);
   if(a.secret()!=null) throw new ApiError(409,"TOTP is already enrolled");
   String secret=new DefaultSecretGenerator(32).generate();
-  store.db.update("update accounts set pending_totp=?,pending_until=now()+interval '5 minutes' where id=?",crypto.encrypt(id,secret),id);
+  store.jdbc().update("update accounts set pending_totp=?,pending_until=now()+interval '5 minutes' where id=?",crypto.encrypt(id,secret),id);
   String uri="otpauth://totp/PasskeyForge:"+a.username()+"?secret="+secret+"&issuer=PasskeyForge&algorithm=SHA1&digits=6&period=30";
   var matrix=new QRCodeWriter().encode(uri,BarcodeFormat.QR_CODE,320,320);
   var bytes=new java.io.ByteArrayOutputStream(); MatrixToImageWriter.writeToStream(matrix,"PNG",bytes);
@@ -33,7 +33,7 @@ public class MfaService {
   if(a.pending()==null || a.pendingUntil()==null || !a.pendingUntil().isAfter(Instant.now()) || a.secret()!=null) throw ApiError.denied();
   long step=match(crypto.decrypt(id,a.pending()),code,-1,Instant.now());
   if(step<0) { audit.event(id,"totp_enrollment_finish","failure"); throw ApiError.denied(); }
-  store.db.update("update accounts set totp_secret=pending_totp,pending_totp=null,pending_until=null,totp_step=? where id=?",step,id);
+  store.jdbc().update("update accounts set totp_secret=pending_totp,pending_totp=null,pending_until=null,totp_step=? where id=?",step,id);
   List<String> codes=rotateInternal(id);
   audit.event(id,"totp_enrollment_finish","success"); return codes;
  }
@@ -42,7 +42,7 @@ public class MfaService {
   var a=store.account(id,true);
   long step=a.secret()==null?-1:match(crypto.decrypt(id,a.secret()),code,a.step(),Instant.now());
   if(step<0) { audit.event(id,"totp_verification","failure"); throw ApiError.denied(); }
-  store.db.update("update accounts set totp_step=? where id=?",step,id);
+  store.jdbc().update("update accounts set totp_step=? where id=?",step,id);
   audit.event(id,"totp_verification","success");
  }
  // Protocol calculation comes from java-totp; account lock + persisted timestep enforces one-time use.
@@ -61,17 +61,17 @@ public class MfaService {
  @Transactional
  public List<String> rotate(UUID id) { store.account(id,true); var result=rotateInternal(id); audit.event(id,"recovery_rotation","success"); return result; }
  private List<String> rotateInternal(UUID id) {
-  store.db.update("delete from recovery_codes where account_id=?",id);
+  store.jdbc().update("delete from recovery_codes where account_id=?",id);
   var codes=new ArrayList<String>();
   for(int i=0;i<10;i++) {
    String code=Base64.getUrlEncoder().withoutPadding().encodeToString(Crypto.random(20)); codes.add(code);
-   store.db.update("insert into recovery_codes values(?,?)",id,Crypto.digest(id+":"+code));
+   store.jdbc().update("insert into recovery_codes values(?,?)",id,Crypto.digest(id+":"+code));
   } return codes;
  }
  @Transactional
  public void redeem(UUID id,String code) {
   store.account(id,true);
-  int deleted=store.db.update("delete from recovery_codes where account_id=? and digest=?",id,Crypto.digest(id+":"+code));
+  int deleted=store.jdbc().update("delete from recovery_codes where account_id=? and digest=?",id,Crypto.digest(id+":"+code));
   audit.event(id,"recovery_redemption",deleted==1?"success":"failure");
   if(deleted!=1) throw ApiError.denied();
  }
@@ -79,7 +79,7 @@ public class MfaService {
  public void disable(UUID id,String code) {
   // Invokes verification in this same transaction; locked row prevents concurrent OTP reuse.
   verify(id,code);
-  store.db.update("update accounts set totp_secret=null,totp_step=-1,pending_totp=null,pending_until=null where id=?",id);
+  store.jdbc().update("update accounts set totp_secret=null,totp_step=-1,pending_totp=null,pending_until=null where id=?",id);
   audit.event(id,"totp_disabled","success");
  }
 }

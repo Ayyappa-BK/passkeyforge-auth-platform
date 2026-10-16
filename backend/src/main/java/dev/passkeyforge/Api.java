@@ -57,40 +57,40 @@ public class Api {
  @GetMapping("/me") Object me(HttpServletRequest req) {
   var a=store.account(sessions.require(req,"FULL"),false);
   return Map.of("id",a.id(),"username",a.username(),"totpEnabled",a.secret()!=null,
-   "recoveryCodesRemaining",store.db.queryForObject("select count(*) from recovery_codes where account_id=?",Integer.class,a.id()));
+   "recoveryCodesRemaining",store.jdbc().queryForObject("select count(*) from recovery_codes where account_id=?",Integer.class,a.id()));
  }
  @GetMapping("/credentials") Object credentials(HttpServletRequest req) {
-  return store.db.queryForList("select id,label,backup_eligible,backed_up,created_at,last_used_at from credentials where account_id=? order by created_at",sessions.require(req,"FULL"));
+  return store.jdbc().queryForList("select id,label,backup_eligible,backed_up,created_at,last_used_at from credentials where account_id=? order by created_at",sessions.require(req,"FULL"));
  }
  @DeleteMapping("/credentials/{id}") void delete(HttpServletRequest req,@PathVariable String id) {
   UUID user=sessions.recent(req);
   tx.executeWithoutResult(t->{
    store.account(user,true);
-   if(store.db.queryForObject("select count(*) from credentials where account_id=?",Integer.class,user)<=1)
+   if(store.jdbc().queryForObject("select count(*) from credentials where account_id=?",Integer.class,user)<=1)
     throw new ApiError(409,"Enroll another passkey before removing the last one");
-   if(store.db.update("delete from credentials where id=? and account_id=?",id,user)!=1) throw new ApiError(404,"Credential not found");
+   if(store.jdbc().update("delete from credentials where id=? and account_id=?",id,user)!=1) throw new ApiError(404,"Credential not found");
   });
-  sessions.revoke(user); sessions.establish(req,user,"FULL"); audit.event(user,"credential_deleted","success");
+  sessions.revoke(user); sessions.refresh(req,user); audit.event(user,"credential_deleted","success");
  }
  @PostMapping("/totp/enrollment") Object enroll(HttpServletRequest req) throws Exception {
   UUID id=sessions.recent(req); attempt(req,"enrollment",id); return mfa.enroll(id);
  }
  @PostMapping("/totp/confirmation") Object confirm(HttpServletRequest req,@Valid @RequestBody Code c) {
   UUID id=sessions.recent(req); attempt(req,"enrollment",id); var codes=mfa.confirm(id,c.code());
-  sessions.revoke(id); sessions.establish(req,id,"FULL"); return Map.of("recoveryCodes",codes);
+  sessions.revoke(id); sessions.refresh(req,id); return Map.of("recoveryCodes",codes);
  }
  @PostMapping("/totp/disable") void disable(HttpServletRequest req,@Valid @RequestBody Code c) {
-  UUID id=sessions.recent(req); attempt(req,"mfa",id); mfa.disable(id,c.code()); sessions.revoke(id); sessions.establish(req,id,"FULL");
+  UUID id=sessions.recent(req); attempt(req,"mfa",id); mfa.disable(id,c.code()); sessions.revoke(id); sessions.refresh(req,id);
  }
  @PostMapping("/recovery-codes") Object rotate(HttpServletRequest req) {
   UUID id=sessions.recent(req); attempt(req,"recovery_rotation",id);
   return Map.of("recoveryCodes",mfa.rotate(id));
  }
  @GetMapping("/audit") Object events(HttpServletRequest req) {
-  return store.db.queryForList("select event,outcome,occurred_at from audit_events where account_id=? order by occurred_at desc limit 50",sessions.require(req,"FULL"));
+  return store.jdbc().queryForList("select event,outcome,occurred_at from audit_events where account_id=? order by occurred_at desc limit 50",sessions.require(req,"FULL"));
  }
  @PostMapping("/sessions/revoke") void revoke(HttpServletRequest req) {
-  UUID id=sessions.recent(req); sessions.revoke(id); sessions.establish(req,id,"FULL"); audit.event(id,"sessions_revoked","success");
+  UUID id=sessions.recent(req); sessions.revoke(id); sessions.refresh(req,id); audit.event(id,"sessions_revoked","success");
  }
  @PostMapping("/logout") void logout(HttpServletRequest req) {
   var s=req.getSession(false); if(s!=null) s.invalidate();

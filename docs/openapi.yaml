@@ -1,0 +1,1145 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PasskeyForge Authentication API",
+    "version": "1.0.0",
+    "description": "Same-origin cookie API. Get /csrf before every mutation and send its returned header/token. FULL sessions authorize management; MFA and RECOVERY sessions are explicitly restricted."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "security": [
+    {
+      "session": []
+    }
+  ],
+  "paths": {
+    "/csrf": {
+      "get": {
+        "summary": "Get session CSRF token",
+        "description": "Session requirement: Any. All mutation requests require the current CSRF token.",
+        "operationId": "get_csrf",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "headerName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": []
+      }
+    },
+    "/registration/options": {
+      "post": {
+        "summary": "Start passkey enrollment",
+        "description": "Session requirement: Anonymous signup, recent FULL, or RECOVERY. All mutation requests require the current CSRF token.",
+        "operationId": "post_registration_options",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Options"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Name"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/registration/finish": {
+      "post": {
+        "summary": "Validate and save passkey",
+        "description": "Session requirement: Initiating browser; owner rechecked. All mutation requests require the current CSRF token.",
+        "operationId": "post_registration_finish",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinishResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Finish"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/authentication/options": {
+      "post": {
+        "summary": "Start discoverable passkey login",
+        "description": "Session requirement: Any. All mutation requests require the current CSRF token.",
+        "operationId": "post_authentication_options",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Options"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ]
+      }
+    },
+    "/authentication/finish": {
+      "post": {
+        "summary": "Validate signed assertion",
+        "description": "Session requirement: Initiating browser. All mutation requests require the current CSRF token.",
+        "operationId": "post_authentication_finish",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinishResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Finish"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mfa/totp": {
+      "post": {
+        "summary": "Verify RFC 6238 code",
+        "description": "Session requirement: PENDING. All mutation requests require the current CSRF token.",
+        "operationId": "post_mfa_totp",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Code"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mfa/recovery": {
+      "post": {
+        "summary": "Redeem recovery code as second factor",
+        "description": "Session requirement: PENDING. All mutation requests require the current CSRF token.",
+        "operationId": "post_mfa_recovery",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Code"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recovery": {
+      "post": {
+        "summary": "Enter restricted lost-passkey recovery",
+        "description": "Session requirement: Any; possession of unused recovery code required. All mutation requests require the current CSRF token.",
+        "operationId": "post_recovery",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enrollPasskeyRequired": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Recovery"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Read account security status",
+        "description": "Session requirement: FULL. All mutation requests require the current CSRF token.",
+        "operationId": "get_me",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        }
+      }
+    },
+    "/credentials": {
+      "get": {
+        "summary": "List owned credential metadata",
+        "description": "Session requirement: FULL. All mutation requests require the current CSRF token.",
+        "operationId": "get_credentials",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Credential"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        }
+      }
+    },
+    "/credentials/{id}": {
+      "delete": {
+        "summary": "Remove owned passkey (last passkey protected)",
+        "description": "Session requirement: Recent FULL. All mutation requests require the current CSRF token.",
+        "operationId": "delete_credentials_id",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Base64url WebAuthn credential ID."
+          }
+        ]
+      }
+    },
+    "/totp/enrollment": {
+      "post": {
+        "summary": "Generate encrypted pending TOTP enrollment",
+        "description": "Session requirement: Recent FULL. All mutation requests require the current CSRF token.",
+        "operationId": "post_totp_enrollment",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Enrollment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ]
+      }
+    },
+    "/totp/confirmation": {
+      "post": {
+        "summary": "Activate TOTP and replace recovery codes",
+        "description": "Session requirement: Recent FULL plus valid unused OTP. All mutation requests require the current CSRF token.",
+        "operationId": "post_totp_confirmation",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Codes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Code"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/totp/disable": {
+      "post": {
+        "summary": "Disable TOTP with a fresh OTP",
+        "description": "Session requirement: Recent FULL plus valid unused OTP. All mutation requests require the current CSRF token.",
+        "operationId": "post_totp_disable",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Code"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recovery-codes": {
+      "post": {
+        "summary": "Replace all recovery codes",
+        "description": "Session requirement: Recent FULL. All mutation requests require the current CSRF token.",
+        "operationId": "post_recovery_codes",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Codes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ]
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "Read latest 50 account audit events",
+        "description": "Session requirement: FULL. All mutation requests require the current CSRF token.",
+        "operationId": "get_audit",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEvent"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        }
+      }
+    },
+    "/sessions/revoke": {
+      "post": {
+        "summary": "Revoke sessions and rotate current session",
+        "description": "Session requirement: Recent FULL. All mutation requests require the current CSRF token.",
+        "operationId": "post_sessions_revoke",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ]
+      }
+    },
+    "/logout": {
+      "post": {
+        "summary": "Invalidate current session",
+        "description": "Session requirement: Any. All mutation requests require the current CSRF token.",
+        "operationId": "post_logout",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Malformed request"
+          },
+          "401": {
+            "description": "Authentication failed or expired"
+          },
+          "403": {
+            "description": "CSRF or authorization rejected"
+          },
+          "409": {
+            "description": "State conflict"
+          },
+          "413": {
+            "description": "Request too large"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use headerName returned by /csrf (default X-CSRF-TOKEN)."
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "PFSESSION"
+      },
+      "csrf": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-TOKEN"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Code": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "Finish": {
+        "type": "object",
+        "required": [
+          "ceremonyId",
+          "credential"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ceremonyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "credential": {
+            "type": "object",
+            "description": "Native PublicKeyCredential.toJSON() result; parsed and validated by Yubico."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      },
+      "Name": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]{3,64}$",
+            "description": "Required for anonymous signup; ignored for existing-account enrollment."
+          }
+        }
+      },
+      "Recovery": {
+        "type": "object",
+        "required": [
+          "username",
+          "code"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      },
+      "Options": {
+        "type": "object",
+        "required": [
+          "ceremonyId",
+          "options"
+        ],
+        "properties": {
+          "ceremonyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "publicKey": {
+                "type": "object",
+                "description": "WebAuthn creation/request JSON options. Browser converts base64url binary fields using parseCreationOptionsFromJSON/parseRequestOptionsFromJSON."
+              }
+            }
+          }
+        }
+      },
+      "FinishResult": {
+        "type": "object",
+        "properties": {
+          "mfaRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Codes": {
+        "type": "object",
+        "properties": {
+          "recoveryCodes": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "items": {
+              "type": "string"
+            },
+            "description": "Shown once. Previous codes are invalidated."
+          }
+        }
+      },
+      "Enrollment": {
+        "type": "object",
+        "properties": {
+          "uri": {
+            "type": "string",
+            "description": "otpauth URI, contains the enrollment secret; do not log."
+          },
+          "qrDataUrl": {
+            "type": "string",
+            "description": "Local PNG data URL; contains enrollment secret."
+          }
+        }
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          },
+          "totpEnabled": {
+            "type": "boolean"
+          },
+          "recoveryCodesRemaining": {
+            "type": "integer"
+          }
+        }
+      },
+      "Credential": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "backup_eligible": {
+            "type": "boolean"
+          },
+          "backed_up": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

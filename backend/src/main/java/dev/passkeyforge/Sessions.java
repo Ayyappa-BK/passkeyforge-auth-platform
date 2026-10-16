@@ -19,6 +19,13 @@ public class Sessions {
   s.setAttribute("issued",Instant.now().getEpochSecond()); s.setAttribute("verified",Instant.now().getEpochSecond());
   s.setAttribute(FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME,user.toString());
  }
+ public void refresh(HttpServletRequest req,UUID user) {
+  long verified=(Long)req.getSession().getAttribute("verified");
+  long issued=(Long)req.getSession().getAttribute("issued");
+  establish(req,user,"FULL");
+  req.getSession().setAttribute("verified",verified);
+  req.getSession().setAttribute("issued",issued);
+ }
  public UUID require(HttpServletRequest req,String... levels) {
   var s=req.getSession(false); if(s==null) throw ApiError.denied();
   var issued=(Long)s.getAttribute("issued"); String level=(String)s.getAttribute("level");

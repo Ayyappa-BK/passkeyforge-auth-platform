@@ -8,9 +8,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 @Service
 public class Challenges {
- final JdbcTemplate db; final TransactionTemplate fresh;
- public Challenges(JdbcTemplate db,PlatformTransactionManager tm) {
-  this.db=db; fresh=new TransactionTemplate(tm); fresh.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+ final JdbcTemplate db; final TransactionTemplate fresh; final Audit audit;
+ public Challenges(JdbcTemplate db,PlatformTransactionManager tm,Audit audit) {
+  this.db=db; this.audit=audit; fresh=new TransactionTemplate(tm); fresh.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
  }
  record Challenge(UUID id,String kind,UUID account,String payload) {}
  UUID issue(String binding,String kind,UUID account,String payload) {
@@ -20,9 +20,10 @@ public class Challenges {
  }
  Challenge consume(UUID id,String binding,String kind) {
   // Commit the burn even if protocol validation or the outer transaction fails.
-  return fresh.execute(tx->db.query("delete from challenges where id=? and binding=? and kind=? and expires_at>now() returning *",
+  try { return fresh.execute(tx->db.query("delete from challenges where id=? and binding=? and kind=? and expires_at>now() returning *",
    (r,n)->new Challenge(r.getObject("id",UUID.class),r.getString("kind"),r.getObject("account_id",UUID.class),r.getString("payload")),
    id,Crypto.digest(binding),kind).stream().findFirst().orElseThrow(ApiError::denied));
+  } catch(ApiError e) { audit.event(null,"challenge_rejected","failure"); throw e; }
  }
  @Scheduled(fixedDelay=60000) void cleanup() {
   db.update("delete from challenges where expires_at<now()");

@@ -30,7 +30,7 @@ public class WebAuthnService {
   if(s!=null && s.getAttribute("uid")!=null) {
    id="RECOVERY".equals(s.getAttribute("level"))?sessions.require(req,"RECOVERY"):sessions.recent(req);
    var a=store.account(id,true);
-   if(store.db.queryForObject("select count(*) from credentials where account_id=?",Integer.class,id)>=10)
+   if(store.jdbc().queryForObject("select count(*) from credentials where account_id=?",Integer.class,id)>=10)
     throw new ApiError(409,"Credential limit reached");
    user=UserIdentity.builder().name(a.username()).displayName(a.username()).id(new ByteArray(a.handle())).build();
   } else {
@@ -50,7 +50,7 @@ public class WebAuthnService {
   var c=challenges.consume(ceremony,sessions.binding(req),"REGISTER");
   try {
    var options=PublicKeyCredentialCreationOptions.fromJson(c.payload());
-   boolean exists=store.db.queryForObject("select count(*) from accounts where id=?",Integer.class,c.account())>0;
+   boolean exists=store.jdbc().queryForObject("select count(*) from accounts where id=?",Integer.class,c.account())>0;
    if(exists) {
     UUID caller="RECOVERY".equals(req.getSession().getAttribute("level"))?sessions.require(req,"RECOVERY"):sessions.recent(req);
     if(!caller.equals(c.account())) throw ApiError.denied();
@@ -58,10 +58,10 @@ public class WebAuthnService {
    }
    var response=PublicKeyCredential.parseRegistrationResponseJson(credential.toString());
    var result=rp.finishRegistration(FinishRegistrationOptions.builder().request(options).response(response).build());
-   if(!exists) store.db.update("insert into accounts(id,username,handle) values(?,?,?)",c.account(),options.getUser().getName(),options.getUser().getId().getBytes());
-   if(store.db.queryForObject("select count(*) from credentials where account_id=?",Integer.class,c.account())>=10)
+   if(!exists) store.jdbc().update("insert into accounts(id,username,handle) values(?,?,?)",c.account(),options.getUser().getName(),options.getUser().getId().getBytes());
+   if(store.jdbc().queryForObject("select count(*) from credentials where account_id=?",Integer.class,c.account())>=10)
     throw new ApiError(409,"Credential limit reached");
-   store.db.update("insert into credentials(id,account_id,public_key,signature_count,label,backup_eligible,backed_up) values(?,?,?,?,?,?,?)",
+   store.jdbc().update("insert into credentials(id,account_id,public_key,signature_count,label,backup_eligible,backed_up) values(?,?,?,?,?,?,?)",
     result.getKeyId().getId().getBase64Url(),c.account(),result.getPublicKeyCose().getBytes(),result.getSignatureCount(),label,result.isBackupEligible(),result.isBackedUp());
    audit.event(c.account(),"registration_finish","success");
    return new Identity(c.account(),store.account(c.account(),false).secret()!=null);
@@ -78,13 +78,13 @@ public class WebAuthnService {
   UUID owner=null;
   try {
    var response=PublicKeyCredential.parseAssertionResponseJson(credential.toString());
-   owner=store.db.query("select account_id from credentials where id=?",(r,n)->r.getObject(1,UUID.class),response.getId().getBase64Url())
+   owner=store.jdbc().query("select account_id from credentials where id=?",(r,n)->r.getObject(1,UUID.class),response.getId().getBase64Url())
     .stream().findFirst().orElseThrow(ApiError::denied);
    var a=store.account(owner,true);
-   store.db.queryForList("select id from credentials where id=? for update",response.getId().getBase64Url());
+   store.jdbc().queryForList("select id from credentials where id=? for update",response.getId().getBase64Url());
    var result=rp.finishAssertion(FinishAssertionOptions.builder().request(AssertionRequest.fromJson(c.payload())).response(response).build());
    if(!result.isSuccess() || !result.getUsername().equals(a.username())) throw ApiError.denied();
-   store.db.update("update credentials set signature_count=?,backed_up=?,last_used_at=now() where id=? and account_id=?",
+   store.jdbc().update("update credentials set signature_count=?,backed_up=?,last_used_at=now() where id=? and account_id=?",
     result.getSignatureCount(),result.isBackedUp(),result.getCredentialId().getBase64Url(),owner);
    audit.event(owner,"passkey_authentication","success");
    return new Identity(owner,a.secret()!=null);

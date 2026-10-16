@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 public class Store implements CredentialRepository {
  final JdbcTemplate db;
  public Store(JdbcTemplate db) { this.db=db; }
+ public JdbcTemplate jdbc() { return db; }
  record Account(UUID id,String username,byte[] handle,String secret,String pending,java.time.Instant pendingUntil,long step) {}
  Account account(UUID id,boolean lock) {
   return db.query("select * from accounts where id=?"+(lock?" for update":""),(r,n)->new Account(

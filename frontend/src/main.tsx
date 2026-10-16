@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import * as webauthn from '@github/webauthn-json';
 import { Fingerprint, ShieldCheck, KeyRound, Smartphone, ArrowUpRight, LogOut, RefreshCw, Plus, Trash2, Activity, LockKeyhole, Download, CircleCheck, ChevronRight } from 'lucide-react';
 import './style.css';
 type Me = {id:string;username:string;totpEnabled:boolean;recoveryCodesRemaining:number};
@@ -26,8 +25,11 @@ function App() {
  async function run(fn:()=>Promise<void>) {setBusy(true);setError('');setNotice('');try {await fn();}catch(e){setError(e instanceof Error?e.message:'Operation failed');}finally{setBusy(false);}}
  async function passkey(register:boolean) {
   if(!window.PublicKeyCredential) throw new Error('This browser does not support WebAuthn. Use a current browser on HTTPS or localhost.');
-  const start=await api<{ceremonyId:string;options:unknown}>(register?'/registration/options':'/authentication/options',register?{username}:{});
-  const credential=register?await webauthn.create(start.options as webauthn.CredentialCreationOptionsJSON):await webauthn.get(start.options as webauthn.CredentialRequestOptionsJSON);
+  const start=await api<{ceremonyId:string;options:{publicKey:PublicKeyCredentialCreationOptionsJSON & PublicKeyCredentialRequestOptionsJSON}}>(register?'/registration/options':'/authentication/options',register?{username}:{});
+  if(!PublicKeyCredential.parseCreationOptionsFromJSON || !PublicKeyCredential.parseRequestOptionsFromJSON) throw new Error('Update your browser to use the WebAuthn JSON API.');
+  const raw=register?await navigator.credentials.create({publicKey:PublicKeyCredential.parseCreationOptionsFromJSON(start.options.publicKey)}):await navigator.credentials.get({publicKey:PublicKeyCredential.parseRequestOptionsFromJSON(start.options.publicKey)});
+  if(!(raw instanceof PublicKeyCredential)) throw new Error('No passkey was returned by your authenticator.');
+  const credential=raw.toJSON();
   const result=await api<{mfaRequired:boolean}>(register?'/registration/finish':'/authentication/finish',{ceremonyId:start.ceremonyId,credential,label});
   if(result.mfaRequired) {setMe(null);setCode('');setMode('mfa');} else {setMode('login');await refresh();}
  }

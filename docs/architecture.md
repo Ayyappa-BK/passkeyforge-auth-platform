@@ -12,7 +12,7 @@ flowchart LR
   P --- D[Accounts, public keys, challenges, sessions, recovery hashes, audit]
 ```
 
-The browser calls `navigator.credentials.create/get` through GitHub's WebAuthn JSON adapter. The Java relying party generates options and validates the complete WebAuthn response. `Store` implements Yubico's `CredentialRepository`. Data access uses parameterized Spring JDBC; Flyway owns schema changes.
+The browser calls `navigator.credentials.create/get` using the native browser WebAuthn JSON serialization APIs. The Java relying party generates options and validates the complete WebAuthn response. `Store` implements Yubico's `CredentialRepository`. Data access uses parameterized Spring JDBC; Flyway owns schema changes.
 
 ## Registration
 
