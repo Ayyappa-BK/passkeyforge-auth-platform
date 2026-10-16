@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 test('real browser WebAuthn, MFA, recovery, credential management and logout',async({page,context})=>{
  const cdp=await context.newCDPSession(page);
  await cdp.send('WebAuthn.enable');
- await cdp.send('WebAuthn.addVirtualAuthenticator',{options:{protocol:'ctap2',transport:'internal',hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}});
+ const {authenticatorId}=await cdp.send('WebAuthn.addVirtualAuthenticator',{options:{protocol:'ctap2',transport:'internal',hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}});
  await page.goto('/');
  await page.getByRole('button',{name:/New here/}).click();
  await page.getByLabel('Account name').fill('browser_'+Date.now());
@@ -17,6 +17,20 @@ test('real browser WebAuthn, MFA, recovery, credential management and logout',as
  await page.getByRole('button',{name:'Remove Browser passkey'}).first().click();
  await page.getByRole('button',{name:'Remove passkey',exact:true}).click();
  await expect(page.locator('tbody tr')).toHaveCount(1);
+ // Copy the test virtual credential into a second isolated browser context to verify JDBC session revocation.
+ const {credentials:virtualCredentials}=await cdp.send('WebAuthn.getCredentials',{authenticatorId});
+ const otherContext=await context.browser()!.newContext(); const other=await otherContext.newPage();
+ const otherCdp=await otherContext.newCDPSession(other); await otherCdp.send('WebAuthn.enable');
+ const {authenticatorId:otherId}=await otherCdp.send('WebAuthn.addVirtualAuthenticator',{options:{protocol:'ctap2',transport:'internal',hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}});
+ for(const credential of virtualCredentials)await otherCdp.send('WebAuthn.addCredential',{authenticatorId:otherId,credential});
+ await other.goto('http://localhost:5173'); await other.getByRole('button',{name:'Continue with a passkey'}).click();
+ await expect(other.getByRole('heading',{name:/Your passkeys/})).toBeVisible();
+ await page.getByRole('button',{name:'Revoke other sessions'}).click();
+ await expect(page.getByRole('status')).toContainText('Other sessions have been revoked');
+ await expect.poll(async()=>(await otherContext.request.get('http://localhost:5173/api/me')).status()).toBe(401);
+ const synced=await otherCdp.send('WebAuthn.getCredentials',{authenticatorId:otherId});
+ for(const credential of synced.credentials){await cdp.send('WebAuthn.removeCredential',{authenticatorId,credentialId:credential.credentialId});await cdp.send('WebAuthn.addCredential',{authenticatorId,credential});}
+ await otherContext.close();
  await page.getByRole('button',{name:'Set up authenticator'}).click();
  await expect(page.getByRole('dialog',{name:'Enroll authenticator'})).toBeVisible();
  await page.getByText('Enter a setup key manually').click();
@@ -48,6 +62,7 @@ test('real browser WebAuthn, MFA, recovery, credential management and logout',as
  await page.getByLabel('Recovery code',{exact:true}).fill(mfaCodes[0]);
  await page.getByRole('button',{name:'Verify and continue'}).click();
  await expect(page.getByRole('heading',{name:/Your passkeys/})).toBeVisible();
+ const metrics=await page.request.get('http://localhost:9090/actuator/prometheus'); expect(metrics.ok()).toBeTruthy(); expect(await metrics.text()).toContain('forge_auth_events_total');
  await page.screenshot({path:'test-results/security-dashboard.png',fullPage:true});
  await page.getByRole('button',{name:'Sign out',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Sign in securely'})).toBeVisible();

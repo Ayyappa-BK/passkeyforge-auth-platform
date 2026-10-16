@@ -57,7 +57,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-CI provisions PostgreSQL, runs the full JUnit suite, builds the TypeScript dashboard, runs Chromium with a CTAP2 virtual authenticator, and builds both container images. Test reports, browser traces and a dashboard screenshot are uploaded as `verification-evidence`. Browser tests use virtual hardware; verify real platform/roaming hardware and mobile compatibility before an external launch.
+CI provisions PostgreSQL, runs the full JUnit suite, builds the TypeScript dashboard, runs Chromium with a CTAP2 virtual authenticator under a least-privilege database role, verifies JDBC session revocation and Prometheus output, and builds both container images. Test reports, browser traces and a dashboard screenshot are uploaded as `verification-evidence`. Browser tests use virtual hardware; verify real platform/roaming hardware and mobile compatibility before an external launch.
 
 ## Repository
 

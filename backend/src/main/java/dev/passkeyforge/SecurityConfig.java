@@ -30,6 +30,7 @@ public class SecurityConfig {
  }
  @Bean SecurityFilterChain security(HttpSecurity http,Sessions sessions,RateLimits limits,Audit audit) throws Exception {
   http.authorizeHttpRequests(a->a
+    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
     .requestMatchers("/api/me","/api/credentials/**","/api/totp/**","/api/recovery-codes","/api/audit","/api/sessions/**").hasRole("FULL")
     .requestMatchers("/api/**","/actuator/health/**","/actuator/prometheus").permitAll()
     .anyRequest().denyAll())

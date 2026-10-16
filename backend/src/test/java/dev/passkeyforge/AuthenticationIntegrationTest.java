@@ -147,4 +147,25 @@ class AuthenticationIntegrationTest {
   signup(); session.setAttribute("verified",System.currentTimeMillis()/1000-301);
   postJson("/recovery-codes",Map.of(),403); postJson("/totp/enrollment",Map.of(),403);
  }
+ @Test void expiredAssertionAndWrongUserHandleAreRejected() throws Exception {
+  var auth=signup(); var opts=options("/authentication/options");
+  db.update("update challenges set expires_at=now()-interval '1 second'");
+  postJson("/authentication/finish",finish(opts,auth.assertion(opts)),401);
+  opts=options("/authentication/options"); auth.handle=Crypto.random(32);
+  postJson("/authentication/finish",finish(opts,auth.assertion(opts)),401);
+ }
+ @Test void signatureCounterRollbackIsRejected() throws Exception {
+  var auth=signup(); login(auth); auth.counter=0;
+  var opts=options("/authentication/options");
+  postJson("/authentication/finish",finish(opts,auth.assertion(opts)),401);
+ }
+ @Test void concurrentChallengeConsumeHasExactlyOneWinner() throws Exception {
+  UUID ceremony=challenges.issue("binding","AUTHENTICATE",UUID.randomUUID(),"{}");
+  try(var pool=Executors.newFixedThreadPool(2)) {
+   Callable<Boolean> call=()->{try{challenges.consume(ceremony,"binding","AUTHENTICATE");return true;}catch(ApiError e){return false;}};
+   var futures=pool.invokeAll(List.of(call,call));
+   assertEquals(1,futures.stream().filter(f->{try{return f.get();}catch(Exception e){throw new RuntimeException(e);}}).count());
+  }
+ }
+
 }

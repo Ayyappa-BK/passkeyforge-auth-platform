@@ -53,9 +53,16 @@ jobs:
       - name: Install browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Provision least-privilege runtime database role
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          psql -h localhost -U passkeyforge -d passkeyforge -v ON_ERROR_STOP=1 -c "CREATE ROLE passkeyforge_runtime LOGIN PASSWORD 'ci-runtime-only'"
+          psql -h localhost -U passkeyforge -d passkeyforge -v ON_ERROR_STOP=1 -f deploy/runtime-grants.sql
+          psql -h localhost -U passkeyforge -d passkeyforge -v ON_ERROR_STOP=1 -c "TRUNCATE rate_buckets"
       - name: Start application for browser tests
         run: |
-          java -jar backend/target/passkeyforge-1.0.0.jar > /tmp/passkeyforge.log 2>&1 &
+          DB_USER=passkeyforge_runtime DB_PASSWORD=ci-runtime-only SPRING_FLYWAY_ENABLED=false java -jar backend/target/passkeyforge-1.0.0.jar > /tmp/passkeyforge.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:9090/actuator/health; then break; fi
             sleep 2
