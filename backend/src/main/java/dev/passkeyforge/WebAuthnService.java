@@ -19,7 +19,7 @@ public class WebAuthnService {
    throw new IllegalArgumentException("Production WebAuthn requires HTTPS");
   rp=RelyingParty.builder().identity(RelyingPartyIdentity.builder().id(rpId).name("PasskeyForge").build())
    .credentialRepository(store).origins(Set.of(origin)).allowOriginPort(false).allowOriginSubdomain(false)
-   .attestationConveyancePreference(AttestationConveyancePreference.NONE).validateSignatureCounter(true).build();
+   .preferredPubkeyParams(java.util.List.of(PublicKeyCredentialParameters.ES256,PublicKeyCredentialParameters.EdDSA,PublicKeyCredentialParameters.RS256)).attestationConveyancePreference(AttestationConveyancePreference.NONE).validateSignatureCounter(true).build();
  }
  record Options(UUID ceremonyId,JsonNode options) {}
  record Identity(UUID id,boolean mfa) {}
@@ -65,7 +65,7 @@ public class WebAuthnService {
     result.getKeyId().getId().getBase64Url(),c.account(),result.getPublicKeyCose().getBytes(),result.getSignatureCount(),label,result.isBackupEligible(),result.isBackedUp());
    audit.event(c.account(),"registration_finish","success");
    return new Identity(c.account(),store.account(c.account(),false).secret()!=null);
-  } catch(Exception e) { audit.event(c.account(),"registration_finish","failure"); throw ApiError.denied(); }
+  } catch(Exception e) { rejection(e); audit.event(c.account(),"registration_finish","failure"); throw ApiError.denied(); }
  }
  public Options authentication(HttpServletRequest req) throws Exception {
   var options=rp.startAssertion(StartAssertionOptions.builder().userVerification(UserVerificationRequirement.REQUIRED).timeout(120000).build());
@@ -88,7 +88,14 @@ public class WebAuthnService {
     result.getSignatureCount(),result.isBackedUp(),result.getCredentialId().getBase64Url(),owner);
    audit.event(owner,"passkey_authentication","success");
    return new Identity(owner,a.secret()!=null);
-  } catch(Exception e) { audit.event(owner,"passkey_authentication","failure"); throw ApiError.denied(); }
+  } catch(Exception e) { rejection(e); audit.event(owner,"passkey_authentication","failure"); throw ApiError.denied(); }
+ }
+ static void rejection(Exception e) {
+  // Deliberately exclude exception messages and response objects from logs.
+  org.slf4j.LoggerFactory.getLogger(WebAuthnService.class).atDebug()
+   .addKeyValue("exception_type",e.getClass().getName())
+   .addKeyValue("location",e.getStackTrace().length==0?"unknown":e.getStackTrace()[0].toString())
+   .log("WebAuthn operation rejected");
  }
  static String normalize(String input) {
   if(input==null || !input.matches("[A-Za-z0-9_]{3,64}")) throw new ApiError(400,"Use 3–64 letters, numbers or underscores");

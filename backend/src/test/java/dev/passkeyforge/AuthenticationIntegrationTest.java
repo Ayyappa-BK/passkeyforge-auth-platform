@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.*;
 import java.util.*;
 import java.util.concurrent.*;
 import dev.samstevens.totp.code.DefaultCodeGenerator;
-@SpringBootTest(properties={"spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.session.SessionAutoConfiguration","management.otlp.tracing.export.enabled=false","forge.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
+@SpringBootTest(properties={"spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.session.SessionAutoConfiguration","logging.level.dev.passkeyforge.WebAuthnService=DEBUG","management.otlp.tracing.export.enabled=false","forge.encryption-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 @AutoConfigureMockMvc
 class AuthenticationIntegrationTest {
  @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired JdbcTemplate db; @Autowired Crypto crypto;
