@@ -1,66 +1,873 @@
-import React, { useState, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
-import { Fingerprint, ShieldCheck, KeyRound, Smartphone, ArrowUpRight, LogOut, RefreshCw, Plus, Trash2, Activity, LockKeyhole, Download, CircleCheck, ChevronRight } from 'lucide-react';
-import './style.css';
-type Me = {id:string;username:string;totpEnabled:boolean;recoveryCodesRemaining:number};
-type Credential = {id:string;label:string;backup_eligible:boolean;backed_up:boolean;created_at:string;last_used_at:string|null};
-type Audit = {event:string;outcome:string;occurred_at:string};
-async function api<T>(path:string, body?:unknown, method=body===undefined?'GET':'POST'):Promise<T> {
- const headers:Record<string,string>={'Content-Type':'application/json'};
- if(method!=='GET') {
-  const csrf=await fetch('/api/csrf',{credentials:'same-origin',cache:'no-store'}).then(r=>r.json()); headers[csrf.headerName]=csrf.token;
- }
- const res=await fetch('/api'+path,{method,credentials:'same-origin',cache:'no-store',headers,body:body===undefined?undefined:JSON.stringify(body)});
- if(!res.ok) { let message=res.status===429?'Too many attempts. Please wait before trying again.':res.status===401?'Authentication failed or expired. Sign in and try again.':'The operation could not be completed.'; try {const error=await res.json(); message=error.error||message;}catch{} throw new Error(message); }
- return res.status===204 || res.headers.get('content-length')==='0' ? undefined as T : (await res.text().then(t=>t?JSON.parse(t):undefined)) as T;
+import React, { useState, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  Fingerprint,
+  ShieldCheck,
+  KeyRound,
+  Smartphone,
+  ArrowUpRight,
+  LogOut,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Activity,
+  LockKeyhole,
+  Download,
+  CircleCheck,
+  ChevronRight,
+} from "lucide-react";
+import "./style.css";
+type Me = {
+  id: string;
+  username: string;
+  totpEnabled: boolean;
+  recoveryCodesRemaining: number;
+};
+type Credential = {
+  id: string;
+  label: string;
+  backup_eligible: boolean;
+  backed_up: boolean;
+  created_at: string;
+  last_used_at: string | null;
+};
+type Audit = { event: string; outcome: string; occurred_at: string };
+async function api<T>(
+  path: string,
+  body?: unknown,
+  method = body === undefined ? "GET" : "POST",
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (method !== "GET") {
+    const csrf = await fetch("/api/csrf", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then((r) => r.json());
+    headers[csrf.headerName] = csrf.token;
+  }
+  const res = await fetch("/api" + path, {
+    method,
+    credentials: "same-origin",
+    cache: "no-store",
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let message =
+      res.status === 429
+        ? "Too many attempts. Please wait before trying again."
+        : res.status === 401
+          ? "Authentication failed or expired. Sign in and try again."
+          : "The operation could not be completed.";
+    try {
+      const error = await res.json();
+      message = error.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+  return res.status === 204 || res.headers.get("content-length") === "0"
+    ? (undefined as T)
+    : ((await res.text().then((t) => (t ? JSON.parse(t) : undefined))) as T);
 }
 function App() {
- const [me,setMe]=useState<Me|null>(null),[credentials,setCredentials]=useState<Credential[]>([]),[events,setEvents]=useState<Audit[]>([]);
- const [mode,setMode]=useState<'login'|'signup'|'mfa'|'recover'|'replace'>('login');
- const [username,setUsername]=useState(''),[label,setLabel]=useState('My passkey'),[code,setCode]=useState(''),[recoveryMfa,setRecoveryMfa]=useState(false);
- const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[codes,setCodes]=useState<string[]>([]);
- const [enrollment,setEnrollment]=useState<{uri:string;qrDataUrl:string}|null>(null),[confirmDelete,setConfirmDelete]=useState<string|null>(null);
- async function refresh() { const user=await api<Me>('/me');setMe(user);const [keys,audit]=await Promise.all([api<Credential[]>('/credentials'),api<Audit[]>('/audit')]);setCredentials(keys);setEvents(audit); }
- useEffect(()=>{refresh().catch(()=>{});},[]);
- async function run(fn:()=>Promise<void>) {setBusy(true);setError('');setNotice('');try {await fn();}catch(e){setError(e instanceof Error?e.message:'Operation failed');}finally{setBusy(false);}}
- async function passkey(register:boolean) {
-  if(!window.PublicKeyCredential) throw new Error('This browser does not support WebAuthn. Use a current browser on HTTPS or localhost.');
-  const start=await api<{ceremonyId:string;options:{publicKey:PublicKeyCredentialCreationOptionsJSON & PublicKeyCredentialRequestOptionsJSON}}>(register?'/registration/options':'/authentication/options',register?{username}:{});
-  if(!PublicKeyCredential.parseCreationOptionsFromJSON || !PublicKeyCredential.parseRequestOptionsFromJSON) throw new Error('Update your browser to use the WebAuthn JSON API.');
-  const raw=register?await navigator.credentials.create({publicKey:PublicKeyCredential.parseCreationOptionsFromJSON(start.options.publicKey)}):await navigator.credentials.get({publicKey:PublicKeyCredential.parseRequestOptionsFromJSON(start.options.publicKey)});
-  if(!(raw instanceof PublicKeyCredential)) throw new Error('No passkey was returned by your authenticator.');
-  const credential=raw.toJSON();
-  const result=await api<{mfaRequired:boolean}>(register?'/registration/finish':'/authentication/finish',{ceremonyId:start.ceremonyId,credential,label});
-  if(result.mfaRequired) {setMe(null);setCode('');setMode('mfa');} else {setMode('login');await refresh();}
- }
- async function completeMfa() {await api(recoveryMfa?'/mfa/recovery':'/mfa/totp',{code});setCode('');setMode('login');await refresh();}
- function downloadCodes() {const blob=new Blob(['PasskeyForge recovery codes — keep offline. Each code can be used once.\n\n'+codes.join('\n')],{type:'text/plain'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='passkeyforge-recovery-codes.txt';a.click();URL.revokeObjectURL(url);}
- const time=(date:string)=>new Date(date).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'});
- return <div className="shell">
-  <aside><a className="brand" href="/"><span className="brand-icon"><Fingerprint size={27}/></span>PasskeyForge<span className="brand-dot">.</span></a><div className="workspace-label">IDENTITY WORKSPACE</div><nav><a className="active" href="#overview"><ShieldCheck size={18}/>Security overview<ChevronRight size={14}/></a><a href="#credentials"><KeyRound size={18}/>Passkeys</a><a href="#factors"><Smartphone size={18}/>Authentication factors</a><a href="#activity"><Activity size={18}/>Activity log</a></nav><div className="aside-note"><LockKeyhole size={22}/><strong>Your identity. Your keys.</strong><p>Private keys stay with your authenticator. You stay in control.</p><span>BUILT ON WEBAUTHN / FIDO2</span></div><div className="aside-user"><div className="avatar">{me?me.username.slice(0,2).toUpperCase():'PF'}</div><div><strong>{me?.username||'Your secure workspace'}</strong><small>{me?'Personal account':'Passwordless by design'}</small></div>{me&&<button className="icon" aria-label="Sign out" onClick={()=>run(async()=>{await api('/logout',{});setMe(null);setCodes([]);setEnrollment(null);setMode('login');})}><LogOut size={17}/></button>}</div></aside>
-  <main id="overview"><header><span>Workspace <ChevronRight size={13}/> <b>Security overview</b></span><span className="protocol"><i/> WebAuthn enabled</span></header>
-   <div className="page-title"><div><div className="eyebrow">ACCOUNT SECURITY</div><h1>Your identity, fortified.</h1><p>Manage your passkeys and keep every sign-in secure.</p></div>{me&&<button className="button secondary" disabled={busy} onClick={()=>run(()=>passkey(false))}><RefreshCw size={15}/>Reauthenticate</button>}</div>
-   {error&&<div className="message error" role="alert">{error}</div>}{notice&&<div className="message" role="status">{notice}</div>}
-   {!me?<section className="auth-grid"><div className="auth-intro"><span className="large-fingerprint"><Fingerprint size={76} strokeWidth={1}/></span><span className="tag">PASSWORDLESS STARTS HERE</span><h2>A stronger sign-in.<br/>One simple touch.</h2><p>Use your fingerprint, face, or security key to access your workspace. No password to remember. No password to steal.</p><div className="trust-row"><ShieldCheck size={16}/> Origin-bound credentials <span>·</span> Device-side verification</div></div><div className="auth-form"><span className="section-kicker">WELCOME TO PASSKEYFORGE</span><h2>{mode==='signup'?'Create your account':mode==='mfa'?'Verify your second factor':mode==='recover'?'Recover your account':mode==='replace'?'Register a replacement passkey':'Sign in securely'}</h2><p>{mode==='mfa'?'Your passkey is verified. Complete your second factor to continue.':mode==='replace'?'Recovery access is limited to registering a new passkey.':'Your authenticator keeps your private key safe.'}</p>
-    <form onSubmit={e=>{e.preventDefault();run(async()=>{if(mode==='mfa')await completeMfa();else if(mode==='recover'){await api('/recovery',{username,code});setMode('replace');setCode('');}else await passkey(mode!=='login');});}}>
-    {(mode==='signup'||mode==='recover')&&<label>Account name<input required minLength={3} maxLength={64} pattern="[A-Za-z0-9_]+" autoComplete="username webauthn" value={username} onChange={e=>setUsername(e.target.value)} placeholder="e.g. alex_morgan"/></label>}
-    {(mode==='signup'||mode==='replace')&&<label>Passkey name<input required maxLength={80} value={label} onChange={e=>setLabel(e.target.value)}/></label>}
-    {(mode==='mfa'||mode==='recover')&&<label>{mode==='recover'||recoveryMfa?'Recovery code':'6-digit authenticator code'}<input required autoComplete="one-time-code" inputMode={mode==='mfa'&&!recoveryMfa?'numeric':'text'} value={code} onChange={e=>setCode(e.target.value)} maxLength={128}/></label>}
-    <button className="button primary wide" disabled={busy}><Fingerprint size={18}/>{busy?'Working…':mode==='login'?'Continue with a passkey':mode==='mfa'?'Verify and continue':mode==='recover'?'Redeem recovery code':'Create passkey'}<ArrowUpRight size={16}/></button></form>
-    {mode==='login'?<><button className="text-button" onClick={()=>{setMode('signup');setError('');}}>New here? Create an account <ChevronRight size={14}/></button><button className="subtle" onClick={()=>setMode('recover')}>Lost access to your passkey?</button></>:mode==='mfa'?<button className="text-button" onClick={()=>{setRecoveryMfa(!recoveryMfa);setCode('');}}>{recoveryMfa?'Use an authenticator code':'Use a recovery code'}</button>:<button className="text-button" onClick={()=>setMode('login')}>Back to sign in</button>}
-    <div className="form-foot"><LockKeyhole size={13}/> Built on open authentication standards</div></div></section>:<>
-    <div className="status-banner"><span className="status-icon"><ShieldCheck size={25}/></span><div><strong>{me.totpEnabled?'Your account has an extra layer of protection':'You’re protected with passkeys'}</strong><p>{me.totpEnabled?'Passkey verification and TOTP are required for every sign-in.':'Add an authenticator app and save recovery codes for stronger protection.'}</p></div><span className="badge"><i/> {me.totpEnabled?'MFA ACTIVE':'PASSKEY ACTIVE'}</span></div>
-    <div className="stats"><div><span>Registered passkeys<KeyRound size={18}/></span><strong>{credentials.length.toString().padStart(2,'0')}</strong><small>Secure, passwordless credentials</small></div><div><span>Authenticator app<Smartphone size={18}/></span><strong className="word">{me.totpEnabled?'Enabled':'Not enrolled'}</strong><small>{me.totpEnabled?'Time-based one-time verification':'Add another layer of security'}</small></div><div><span>Recovery codes<LockKeyhole size={18}/></span><strong>{me.recoveryCodesRemaining.toString().padStart(2,'0')}</strong><small>One-time codes remaining</small></div></div>
-    <section className="panel" id="credentials"><div className="panel-header"><div><h2>Your passkeys <span className="count">{credentials.length}</span></h2><p>Sign in with the devices and security keys you trust.</p></div><button className="button primary" disabled={busy} onClick={()=>run(()=>passkey(true))}><Plus size={16}/>Add passkey</button></div><div className="table-wrap"><table><thead><tr><th>PASSKEY</th><th>BACKUP STATE</th><th>LAST USED</th><th></th></tr></thead><tbody>{credentials.map(c=><tr key={c.id}><td><span className="key-icon"><Fingerprint size={22}/></span><div><strong>{c.label}</strong><small>Added {new Date(c.created_at).toLocaleDateString()}</small></div></td><td><span className="soft-badge">{c.backed_up?'Backed up':c.backup_eligible?'Backup eligible':'Device bound'}</span></td><td>{c.last_used_at?time(c.last_used_at):'Not used yet'}</td><td><button className="icon" disabled={busy||credentials.length===1} aria-label={'Remove '+c.label} onClick={()=>setConfirmDelete(c.id)}><Trash2 size={16}/></button></td></tr>)}</tbody></table></div><div className="panel-note"><ShieldCheck size={14}/> Private keys never leave your authenticator. Register a spare before removing your last passkey.</div></section>
-    <div className="factor-grid" id="factors"><section className="panel factor"><div className="factor-head"><span className="square-icon"><Smartphone size={22}/></span><span className={'soft-badge '+(me.totpEnabled?'green':'')}>{me.totpEnabled?'Enabled':'Optional'}</span></div><h2>Authenticator app</h2><p>Generate a time-based code with your preferred authenticator app for an additional sign-in check.</p>{me.totpEnabled?<form onSubmit={e=>{e.preventDefault();run(async()=>{await api('/totp/disable',{code});setCode('');await refresh();});}}><label>Fresh code to disable TOTP<input required value={code} onChange={e=>setCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}"/></label><button className="button secondary" disabled={busy}>Disable TOTP</button></form>:<button className="button secondary" disabled={busy} onClick={()=>run(async()=>setEnrollment(await api('/totp/enrollment',{})))}>Set up authenticator<ArrowUpRight size={15}/></button>}</section><section className="panel factor"><div className="factor-head"><span className="square-icon"><KeyRound size={22}/></span><span className="soft-badge">{me.recoveryCodesRemaining} remaining</span></div><h2>Recovery codes</h2><p>Your backup plan if you lose access to your devices. Store these codes somewhere safe and offline.</p><button className="button secondary" disabled={busy} onClick={()=>run(async()=>{const r=await api<{recoveryCodes:string[]}>('/recovery-codes',{});setCodes(r.recoveryCodes);await refresh();})}>Generate new codes<ArrowUpRight size={15}/></button><small>Generating new codes invalidates all previous codes.</small></section></div>
-    <section className="panel" id="activity"><div className="panel-header"><div><h2>Recent security activity</h2><p>A record of authentication events for your account.</p></div><Activity size={20}/></div><div className="event-list">{events.slice(0,8).map((e,i)=><div className="event" key={i}><span className={e.outcome==='success'?'event-icon':'event-icon failed'}><CircleCheck size={17}/></span><div><strong>{e.event.replaceAll('_',' ')}</strong><small>{time(e.occurred_at)}</small></div><span className="soft-badge">{e.outcome}</span></div>)}</div></section>
-    <div className="session-tools"><LockKeyhole size={16}/><span>Sessions expire after 20 minutes of inactivity.</span><button className="text-button" disabled={busy} onClick={()=>run(async()=>{await api('/sessions/revoke',{});setNotice('Other sessions have been revoked.');})}>Revoke other sessions</button></div>
-   </>}
-   <footer><span>PasskeyForge <span className="muted">/</span> Identity without passwords.</span><span>WEBAUTHN <i/> FIDO2 <i/> RFC 6238</span></footer>
-  </main>
-  {enrollment&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Enroll authenticator"><h2>Connect your authenticator</h2><p>Scan this code with your authenticator app, then enter its current 6-digit code. This setup expires in five minutes.</p><img className="qr" src={enrollment.qrDataUrl} alt="Authenticator enrollment QR code"/><details><summary>Enter a setup key manually</summary><code>{new URL(enrollment.uri).searchParams.get('secret')}</code></details><form onSubmit={e=>{e.preventDefault();run(async()=>{const r=await api<{recoveryCodes:string[]}>('/totp/confirmation',{code});setCodes(r.recoveryCodes);setCode('');setEnrollment(null);await refresh();});}}><label>Verification code<input required pattern="[0-9]{6}" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value)}/></label><button className="button primary wide" disabled={busy}>Verify authenticator</button></form>{error&&<p role="alert" className="error-text">{error}</p>}<button className="text-button" onClick={()=>{setEnrollment(null);setCode('');}}>Close</button></section></div>}
-  {codes.length>0&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Save recovery codes"><KeyRound size={28}/><h2>Save your recovery codes</h2><p>These codes are shown once. Each code works once, and can recover access to your account. Keep them offline.</p><div className="recovery-list">{codes.map(c=><code key={c}>{c}</code>)}</div><button className="button primary wide" onClick={downloadCodes}><Download size={16}/>Download codes</button><button className="text-button" onClick={()=>setCodes([])}>I have saved my codes</button></section></div>}
-  {confirmDelete&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Remove passkey"><h2>Remove this passkey?</h2><p>It will no longer be accepted for sign-in. Other sessions will be revoked.</p><button className="button primary" disabled={busy} onClick={()=>run(async()=>{await api('/credentials/'+encodeURIComponent(confirmDelete),undefined,'DELETE');setConfirmDelete(null);await refresh();})}>Remove passkey</button><button className="text-button" onClick={()=>setConfirmDelete(null)}>Cancel</button>{error&&<p role="alert">{error}</p>}</section></div>}
- </div>;
+  const [me, setMe] = useState<Me | null>(null),
+    [credentials, setCredentials] = useState<Credential[]>([]),
+    [events, setEvents] = useState<Audit[]>([]);
+  const [mode, setMode] = useState<
+    "login" | "signup" | "mfa" | "recover" | "replace"
+  >("login");
+  const [username, setUsername] = useState(""),
+    [label, setLabel] = useState("My passkey"),
+    [code, setCode] = useState(""),
+    [recoveryMfa, setRecoveryMfa] = useState(false);
+  const [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [busy, setBusy] = useState(false),
+    [codes, setCodes] = useState<string[]>([]);
+  const [enrollment, setEnrollment] = useState<{
+      uri: string;
+      qrDataUrl: string;
+    } | null>(null),
+    [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  async function refresh() {
+    const user = await api<Me>("/me");
+    setMe(user);
+    const [keys, audit] = await Promise.all([
+      api<Credential[]>("/credentials"),
+      api<Audit[]>("/audit"),
+    ]);
+    setCredentials(keys);
+    setEvents(audit);
+  }
+  useEffect(() => {
+    refresh().catch(() => {});
+  }, []);
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function passkey(register: boolean) {
+    if (!window.PublicKeyCredential)
+      throw new Error(
+        "This browser does not support WebAuthn. Use a current browser on HTTPS or localhost.",
+      );
+    const start = await api<{
+      ceremonyId: string;
+      options: {
+        publicKey: PublicKeyCredentialCreationOptionsJSON &
+          PublicKeyCredentialRequestOptionsJSON;
+      };
+    }>(
+      register ? "/registration/options" : "/authentication/options",
+      register ? { username } : {},
+    );
+    if (
+      !PublicKeyCredential.parseCreationOptionsFromJSON ||
+      !PublicKeyCredential.parseRequestOptionsFromJSON
+    )
+      throw new Error("Update your browser to use the WebAuthn JSON API.");
+    const raw = register
+      ? await navigator.credentials.create({
+          publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(
+            start.options.publicKey,
+          ),
+        })
+      : await navigator.credentials.get({
+          publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(
+            start.options.publicKey,
+          ),
+        });
+    if (!(raw instanceof PublicKeyCredential))
+      throw new Error("No passkey was returned by your authenticator.");
+    const credential = raw.toJSON();
+    const result = await api<{ mfaRequired: boolean }>(
+      register ? "/registration/finish" : "/authentication/finish",
+      { ceremonyId: start.ceremonyId, credential, label },
+    );
+    if (result.mfaRequired) {
+      setMe(null);
+      setCode("");
+      setMode("mfa");
+    } else {
+      setMode("login");
+      await refresh();
+    }
+  }
+  async function completeMfa() {
+    await api(recoveryMfa ? "/mfa/recovery" : "/mfa/totp", { code });
+    setCode("");
+    setMode("login");
+    await refresh();
+  }
+  function downloadCodes() {
+    const blob = new Blob(
+      [
+        "PasskeyForge recovery codes — keep offline. Each code can be used once.\n\n" +
+          codes.join("\n"),
+      ],
+      { type: "text/plain" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "passkeyforge-recovery-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  const time = (date: string) =>
+    new Date(date).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  return (
+    <div className="shell">
+      <aside>
+        <a className="brand" href="/">
+          <span className="brand-icon">
+            <Fingerprint size={27} />
+          </span>
+          PasskeyForge<span className="brand-dot">.</span>
+        </a>
+        <div className="workspace-label">IDENTITY WORKSPACE</div>
+        <nav>
+          <a className="active" href="#overview">
+            <ShieldCheck size={18} />
+            Security overview
+            <ChevronRight size={14} />
+          </a>
+          <a href="#credentials">
+            <KeyRound size={18} />
+            Passkeys
+          </a>
+          <a href="#factors">
+            <Smartphone size={18} />
+            Authentication factors
+          </a>
+          <a href="#activity">
+            <Activity size={18} />
+            Activity log
+          </a>
+        </nav>
+        <div className="aside-note">
+          <LockKeyhole size={22} />
+          <strong>Your identity. Your keys.</strong>
+          <p>Private keys stay with your authenticator. You stay in control.</p>
+          <span>BUILT ON WEBAUTHN / FIDO2</span>
+        </div>
+        <div className="aside-user">
+          <div className="avatar">
+            {me ? me.username.slice(0, 2).toUpperCase() : "PF"}
+          </div>
+          <div>
+            <strong>{me?.username || "Your secure workspace"}</strong>
+            <small>{me ? "Personal account" : "Passwordless by design"}</small>
+          </div>
+          {me && (
+            <button
+              className="icon"
+              aria-label="Sign out"
+              onClick={() =>
+                run(async () => {
+                  await api("/logout", {});
+                  setMe(null);
+                  setCodes([]);
+                  setEnrollment(null);
+                  setMode("login");
+                })
+              }
+            >
+              <LogOut size={17} />
+            </button>
+          )}
+        </div>
+      </aside>
+      <main id="overview">
+        <header>
+          <span>
+            Workspace <ChevronRight size={13} /> <b>Security overview</b>
+          </span>
+          <span className="protocol">
+            <i /> WebAuthn enabled
+          </span>
+        </header>
+        <div className="page-title">
+          <div>
+            <div className="eyebrow">ACCOUNT SECURITY</div>
+            <h1>Your identity, fortified.</h1>
+            <p>Manage your passkeys and keep every sign-in secure.</p>
+          </div>
+          {me && (
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => run(() => passkey(false))}
+            >
+              <RefreshCw size={15} />
+              Reauthenticate
+            </button>
+          )}
+        </div>
+        {error && (
+          <div className="message error" role="alert">
+            {error}
+          </div>
+        )}
+        {notice && (
+          <div className="message" role="status">
+            {notice}
+          </div>
+        )}
+        {!me ? (
+          <section className="auth-grid">
+            <div className="auth-intro">
+              <span className="large-fingerprint">
+                <Fingerprint size={76} strokeWidth={1} />
+              </span>
+              <span className="tag">PASSWORDLESS STARTS HERE</span>
+              <h2>
+                A stronger sign-in.
+                <br />
+                One simple touch.
+              </h2>
+              <p>
+                Use your fingerprint, face, or security key to access your
+                workspace. No password to remember. No password to steal.
+              </p>
+              <div className="trust-row">
+                <ShieldCheck size={16} /> Origin-bound credentials{" "}
+                <span>·</span> Device-side verification
+              </div>
+            </div>
+            <div className="auth-form">
+              <span className="section-kicker">WELCOME TO PASSKEYFORGE</span>
+              <h2>
+                {mode === "signup"
+                  ? "Create your account"
+                  : mode === "mfa"
+                    ? "Verify your second factor"
+                    : mode === "recover"
+                      ? "Recover your account"
+                      : mode === "replace"
+                        ? "Register a replacement passkey"
+                        : "Sign in securely"}
+              </h2>
+              <p>
+                {mode === "mfa"
+                  ? "Your passkey is verified. Complete your second factor to continue."
+                  : mode === "replace"
+                    ? "Recovery access is limited to registering a new passkey."
+                    : "Your authenticator keeps your private key safe."}
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  run(async () => {
+                    if (mode === "mfa") await completeMfa();
+                    else if (mode === "recover") {
+                      await api("/recovery", { username, code });
+                      setMode("replace");
+                      setCode("");
+                    } else await passkey(mode !== "login");
+                  });
+                }}
+              >
+                {(mode === "signup" || mode === "recover") && (
+                  <label>
+                    Account name
+                    <input
+                      required
+                      minLength={3}
+                      maxLength={64}
+                      pattern="[A-Za-z0-9_]+"
+                      autoComplete="username webauthn"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. alex_morgan"
+                    />
+                  </label>
+                )}
+                {(mode === "signup" || mode === "replace") && (
+                  <label>
+                    Passkey name
+                    <input
+                      required
+                      maxLength={80}
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                    />
+                  </label>
+                )}
+                {(mode === "mfa" || mode === "recover") && (
+                  <label>
+                    {mode === "recover" || recoveryMfa
+                      ? "Recovery code"
+                      : "6-digit authenticator code"}
+                    <input
+                      required
+                      autoComplete="one-time-code"
+                      inputMode={
+                        mode === "mfa" && !recoveryMfa ? "numeric" : "text"
+                      }
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      maxLength={128}
+                    />
+                  </label>
+                )}
+                <button className="button primary wide" disabled={busy}>
+                  <Fingerprint size={18} />
+                  {busy
+                    ? "Working…"
+                    : mode === "login"
+                      ? "Continue with a passkey"
+                      : mode === "mfa"
+                        ? "Verify and continue"
+                        : mode === "recover"
+                          ? "Redeem recovery code"
+                          : "Create passkey"}
+                  <ArrowUpRight size={16} />
+                </button>
+              </form>
+              {mode === "login" ? (
+                <>
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      setMode("signup");
+                      setError("");
+                    }}
+                  >
+                    New here? Create an account <ChevronRight size={14} />
+                  </button>
+                  <button className="subtle" onClick={() => setMode("recover")}>
+                    Lost access to your passkey?
+                  </button>
+                </>
+              ) : mode === "mfa" ? (
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setRecoveryMfa(!recoveryMfa);
+                    setCode("");
+                  }}
+                >
+                  {recoveryMfa
+                    ? "Use an authenticator code"
+                    : "Use a recovery code"}
+                </button>
+              ) : (
+                <button
+                  className="text-button"
+                  onClick={() => setMode("login")}
+                >
+                  Back to sign in
+                </button>
+              )}
+              <div className="form-foot">
+                <LockKeyhole size={13} /> Built on open authentication standards
+              </div>
+            </div>
+          </section>
+        ) : (
+          <>
+            <div className="status-banner">
+              <span className="status-icon">
+                <ShieldCheck size={25} />
+              </span>
+              <div>
+                <strong>
+                  {me.totpEnabled
+                    ? "Your account has an extra layer of protection"
+                    : "You’re protected with passkeys"}
+                </strong>
+                <p>
+                  {me.totpEnabled
+                    ? "Passkey verification and TOTP are required for every sign-in."
+                    : "Add an authenticator app and save recovery codes for stronger protection."}
+                </p>
+              </div>
+              <span className="badge">
+                <i /> {me.totpEnabled ? "MFA ACTIVE" : "PASSKEY ACTIVE"}
+              </span>
+            </div>
+            <div className="stats">
+              <div>
+                <span>
+                  Registered passkeys
+                  <KeyRound size={18} />
+                </span>
+                <strong>
+                  {credentials.length.toString().padStart(2, "0")}
+                </strong>
+                <small>Secure, passwordless credentials</small>
+              </div>
+              <div>
+                <span>
+                  Authenticator app
+                  <Smartphone size={18} />
+                </span>
+                <strong className="word">
+                  {me.totpEnabled ? "Enabled" : "Not enrolled"}
+                </strong>
+                <small>
+                  {me.totpEnabled
+                    ? "Time-based one-time verification"
+                    : "Add another layer of security"}
+                </small>
+              </div>
+              <div>
+                <span>
+                  Recovery codes
+                  <LockKeyhole size={18} />
+                </span>
+                <strong>
+                  {me.recoveryCodesRemaining.toString().padStart(2, "0")}
+                </strong>
+                <small>One-time codes remaining</small>
+              </div>
+            </div>
+            <section className="panel" id="credentials">
+              <div className="panel-header">
+                <div>
+                  <h2>
+                    Your passkeys{" "}
+                    <span className="count">{credentials.length}</span>
+                  </h2>
+                  <p>Sign in with the devices and security keys you trust.</p>
+                </div>
+                <button
+                  className="button primary"
+                  disabled={busy}
+                  onClick={() => run(() => passkey(true))}
+                >
+                  <Plus size={16} />
+                  Add passkey
+                </button>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>PASSKEY</th>
+                      <th>BACKUP STATE</th>
+                      <th>LAST USED</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {credentials.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <span className="key-icon">
+                            <Fingerprint size={22} />
+                          </span>
+                          <div>
+                            <strong>{c.label}</strong>
+                            <small>
+                              Added{" "}
+                              {new Date(c.created_at).toLocaleDateString()}
+                            </small>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="soft-badge">
+                            {c.backed_up
+                              ? "Backed up"
+                              : c.backup_eligible
+                                ? "Backup eligible"
+                                : "Device bound"}
+                          </span>
+                        </td>
+                        <td>
+                          {c.last_used_at
+                            ? time(c.last_used_at)
+                            : "Not used yet"}
+                        </td>
+                        <td>
+                          <button
+                            className="icon"
+                            disabled={busy || credentials.length === 1}
+                            aria-label={"Remove " + c.label}
+                            onClick={() => setConfirmDelete(c.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="panel-note">
+                <ShieldCheck size={14} /> Private keys never leave your
+                authenticator. Register a spare before removing your last
+                passkey.
+              </div>
+            </section>
+            <div className="factor-grid" id="factors">
+              <section className="panel factor">
+                <div className="factor-head">
+                  <span className="square-icon">
+                    <Smartphone size={22} />
+                  </span>
+                  <span
+                    className={"soft-badge " + (me.totpEnabled ? "green" : "")}
+                  >
+                    {me.totpEnabled ? "Enabled" : "Optional"}
+                  </span>
+                </div>
+                <h2>Authenticator app</h2>
+                <p>
+                  Generate a time-based code with your preferred authenticator
+                  app for an additional sign-in check.
+                </p>
+                {me.totpEnabled ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      run(async () => {
+                        await api("/totp/disable", { code });
+                        setCode("");
+                        await refresh();
+                      });
+                    }}
+                  >
+                    <label>
+                      Fresh code to disable TOTP
+                      <input
+                        required
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        autoComplete="one-time-code"
+                        inputMode="numeric"
+                        pattern="[0-9]{6}"
+                      />
+                    </label>
+                    <button className="button secondary" disabled={busy}>
+                      Disable TOTP
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    className="button secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () =>
+                        setEnrollment(await api("/totp/enrollment", {})),
+                      )
+                    }
+                  >
+                    Set up authenticator
+                    <ArrowUpRight size={15} />
+                  </button>
+                )}
+              </section>
+              <section className="panel factor">
+                <div className="factor-head">
+                  <span className="square-icon">
+                    <KeyRound size={22} />
+                  </span>
+                  <span className="soft-badge">
+                    {me.recoveryCodesRemaining} remaining
+                  </span>
+                </div>
+                <h2>Recovery codes</h2>
+                <p>
+                  Your backup plan if you lose access to your devices. Store
+                  these codes somewhere safe and offline.
+                </p>
+                <button
+                  className="button secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      const r = await api<{ recoveryCodes: string[] }>(
+                        "/recovery-codes",
+                        {},
+                      );
+                      setCodes(r.recoveryCodes);
+                      await refresh();
+                    })
+                  }
+                >
+                  Generate new codes
+                  <ArrowUpRight size={15} />
+                </button>
+                <small>
+                  Generating new codes invalidates all previous codes.
+                </small>
+              </section>
+            </div>
+            <section className="panel" id="activity">
+              <div className="panel-header">
+                <div>
+                  <h2>Recent security activity</h2>
+                  <p>A record of authentication events for your account.</p>
+                </div>
+                <Activity size={20} />
+              </div>
+              <div className="event-list">
+                {events.slice(0, 8).map((e, i) => (
+                  <div className="event" key={i}>
+                    <span
+                      className={
+                        e.outcome === "success"
+                          ? "event-icon"
+                          : "event-icon failed"
+                      }
+                    >
+                      <CircleCheck size={17} />
+                    </span>
+                    <div>
+                      <strong>{e.event.replaceAll("_", " ")}</strong>
+                      <small>{time(e.occurred_at)}</small>
+                    </div>
+                    <span className="soft-badge">{e.outcome}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <div className="session-tools">
+              <LockKeyhole size={16} />
+              <span>Sessions expire after 20 minutes of inactivity.</span>
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    await api("/sessions/revoke", {});
+                    setNotice("Other sessions have been revoked.");
+                  })
+                }
+              >
+                Revoke other sessions
+              </button>
+            </div>
+          </>
+        )}
+        <footer>
+          <span>
+            PasskeyForge <span className="muted">/</span> Identity without
+            passwords.
+          </span>
+          <span>
+            WEBAUTHN <i /> FIDO2 <i /> RFC 6238
+          </span>
+        </footer>
+      </main>
+      {enrollment && (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Enroll authenticator"
+          >
+            <h2>Connect your authenticator</h2>
+            <p>
+              Scan this code with your authenticator app, then enter its current
+              6-digit code. This setup expires in five minutes.
+            </p>
+            <img
+              className="qr"
+              src={enrollment.qrDataUrl}
+              alt="Authenticator enrollment QR code"
+            />
+            <details>
+              <summary>Enter a setup key manually</summary>
+              <code>{new URL(enrollment.uri).searchParams.get("secret")}</code>
+            </details>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                run(async () => {
+                  const r = await api<{ recoveryCodes: string[] }>(
+                    "/totp/confirmation",
+                    { code },
+                  );
+                  setCodes(r.recoveryCodes);
+                  setCode("");
+                  setEnrollment(null);
+                  await refresh();
+                });
+              }}
+            >
+              <label>
+                Verification code
+                <input
+                  required
+                  pattern="[0-9]{6}"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </label>
+              <button className="button primary wide" disabled={busy}>
+                Verify authenticator
+              </button>
+            </form>
+            {error && (
+              <p role="alert" className="error-text">
+                {error}
+              </p>
+            )}
+            <button
+              className="text-button"
+              onClick={() => {
+                setEnrollment(null);
+                setCode("");
+              }}
+            >
+              Close
+            </button>
+          </section>
+        </div>
+      )}
+      {codes.length > 0 && (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Save recovery codes"
+          >
+            <KeyRound size={28} />
+            <h2>Save your recovery codes</h2>
+            <p>
+              These codes are shown once. Each code works once, and can recover
+              access to your account. Keep them offline.
+            </p>
+            <div className="recovery-list">
+              {codes.map((c) => (
+                <code key={c}>{c}</code>
+              ))}
+            </div>
+            <button className="button primary wide" onClick={downloadCodes}>
+              <Download size={16} />
+              Download codes
+            </button>
+            <button className="text-button" onClick={() => setCodes([])}>
+              I have saved my codes
+            </button>
+          </section>
+        </div>
+      )}
+      {confirmDelete && (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Remove passkey"
+          >
+            <h2>Remove this passkey?</h2>
+            <p>
+              It will no longer be accepted for sign-in. Other sessions will be
+              revoked.
+            </p>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  await api(
+                    "/credentials/" + encodeURIComponent(confirmDelete),
+                    undefined,
+                    "DELETE",
+                  );
+                  setConfirmDelete(null);
+                  await refresh();
+                })
+              }
+            >
+              Remove passkey
+            </button>
+            <button
+              className="text-button"
+              onClick={() => setConfirmDelete(null)}
+            >
+              Cancel
+            </button>
+            {error && <p role="alert">{error}</p>}
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
